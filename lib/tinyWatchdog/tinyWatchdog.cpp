@@ -1,11 +1,13 @@
 #include "tinyWatchdog.hpp"
 #include <avr/io.h>
+#include <util/atomic.h>
 
 void tinyWatchdog::begin(watchdogTimeout period, watchdogTimeout window)
 {
     _period = period;
     _window = window;
 }
+
 void tinyWatchdog::enable()
 {
     if (_period != watchdogTimeout::timeoutDisabled)
@@ -15,25 +17,36 @@ void tinyWatchdog::enable()
 
         uint8_t controlByte = (period & 0xf) | ((window & 0xf) << 4);
 
-        CPU_CCP = 0xd8;          // Unlock watchdog configuration registers
-        WDT_CTRLA = controlByte; // Configure and enable watchdog
+        reset();
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+        {
+            CPU_CCP = 0xd8;          // Unlock watchdog configuration registers
+            WDT_CTRLA = controlByte; // Configure and enable watchdog
+        }
 
         _enabled = true;
     }
 }
+
 void tinyWatchdog::disable()
 {
-    CPU_CCP = 0xd8;   // Unlock watchdog configuration registers
-    WDT_CTRLA = 0x00; // Disable watchdog
+    reset();
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    {
+        CPU_CCP = 0xd8;   // Unlock watchdog configuration registers
+        WDT_CTRLA = 0x00; // Disable watchdog
+    }
 
     _enabled = false;
 }
+
 void tinyWatchdog::reset()
 {
     asm volatile("WDR");
 }
 
-bool tinyWatchdog::isEnabled() {
+bool tinyWatchdog::isEnabled()
+{
     return _enabled;
 }
 
